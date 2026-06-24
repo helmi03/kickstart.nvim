@@ -166,6 +166,10 @@ do
   -- Enable undo/redo changes even after closing and reopening a file
   vim.o.undofile = true
 
+  -- Auto-reload files changed outside Neovim (e.g. edits made by Claude Code).
+  -- `autoread` allows it; the autocmd in SECTION 2 triggers the check.
+  vim.o.autoread = true
+
   -- Case-insensitive searching UNLESS \C or one or more capital letters in the search term
   vim.o.ignorecase = true
   vim.o.smartcase = true
@@ -307,6 +311,23 @@ do
     group = vim.api.nvim_create_augroup('kickstart-highlight-yank', { clear = true }),
     callback = function() vim.hl.on_yank() end,
   })
+
+  -- Check for files changed on disk (e.g. by Claude Code) and reload them.
+  -- Pairs with `autoread` (SECTION 1) so external edits show up automatically.
+  vim.api.nvim_create_autocmd({ 'FocusGained', 'BufEnter', 'CursorHold', 'TermClose', 'TermLeave' }, {
+    desc = 'Reload buffers changed outside Neovim',
+    group = vim.api.nvim_create_augroup('kickstart-auto-reload', { clear = true }),
+    callback = function()
+      if vim.fn.mode() ~= 'c' and vim.fn.getcmdwintype() == '' then vim.cmd.checktime() end
+    end,
+  })
+
+  -- Notify when a file was changed externally and reloaded into the buffer.
+  vim.api.nvim_create_autocmd('FileChangedShellPost', {
+    desc = 'Notify on external file change',
+    group = vim.api.nvim_create_augroup('kickstart-file-changed', { clear = true }),
+    callback = function() vim.notify('File changed on disk — buffer reloaded', vim.log.levels.WARN) end,
+  })
 end
 
 -- ============================================================
@@ -416,6 +437,22 @@ do
       topdelete = { text = '‾' }, ---@diagnostic disable-line: missing-fields
       changedelete = { text = '~' }, ---@diagnostic disable-line: missing-fields
     },
+    -- Buffer-local keymaps for reviewing changes (e.g. edits made by Claude Code).
+    on_attach = function(bufnr)
+      local gs = require 'gitsigns'
+      local function map(mode, lhs, rhs, desc)
+        vim.keymap.set(mode, lhs, rhs, { buffer = bufnr, desc = desc })
+      end
+      -- Navigate hunks
+      map('n', ']h', function() gs.nav_hunk 'next' end, 'Next [H]unk')
+      map('n', '[h', function() gs.nav_hunk 'prev' end, 'Prev [H]unk')
+      -- Inspect / act on hunks
+      map('n', '<leader>hp', gs.preview_hunk, 'Git [H]unk [P]review')
+      map('n', '<leader>hd', gs.diffthis, 'Git [H]unk [D]iff vs HEAD')
+      map('n', '<leader>hb', function() gs.blame_line { full = true } end, 'Git [H]unk [B]lame line')
+      map('n', '<leader>hr', gs.reset_hunk, 'Git [H]unk [R]eset')
+      map('v', '<leader>hr', function() gs.reset_hunk { vim.fn.line '.', vim.fn.line 'v' } end, 'Git [H]unk [R]eset (selection)')
+    end,
   }
 
   -- Useful plugin to show you pending keybinds.
@@ -428,7 +465,8 @@ do
     spec = {
       { '<leader>s', group = '[S]earch', mode = { 'n', 'v' } },
       { '<leader>t', group = '[T]oggle' },
-      { '<leader>h', group = 'Git [H]unk', mode = { 'n', 'v' } }, -- Enable gitsigns recommended keymaps first
+      { '<leader>g', group = '[G]it' },
+      { '<leader>h', group = 'Git [H]unk', mode = { 'n', 'v' } },
       { 'gr', group = 'LSP Actions', mode = { 'n' } },
     },
   }
@@ -557,6 +595,11 @@ do
 
   -- File tree explorer (replaces the neo-tree example in SECTION 10).
   vim.keymap.set('n', '<leader>e', pick.explorer, { desc = 'File [E]xplorer' })
+
+  -- Git review pickers (handy after a Claude Code editing session).
+  vim.keymap.set('n', '<leader>gs', pick.git_status, { desc = '[G]it [S]tatus (changed files)' })
+  vim.keymap.set('n', '<leader>gd', pick.git_diff, { desc = '[G]it [D]iff (hunks)' })
+  vim.keymap.set('n', '<leader>gl', pick.git_log, { desc = '[G]it [L]og' })
 
   -- Add snacks.picker LSP pickers when an LSP attaches to a buffer.
   -- If you later switch picker plugins, this is where to update these mappings.
