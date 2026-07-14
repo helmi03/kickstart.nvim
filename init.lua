@@ -522,10 +522,23 @@ do
 
   -- Add/delete/replace surroundings (brackets, quotes, etc.)
   --
-  -- - saiw) - [S]urround [A]dd [I]nner [W]ord [)]Paren
-  -- - sd'   - [S]urround [D]elete [']quotes
-  -- - sr)'  - [S]urround [R]eplace [)] [']
-  require('mini.surround').setup()
+  -- - gsaiw) - [S]urround [A]dd [I]nner [W]ord [)]Paren
+  -- - gsd'   - [S]urround [D]elete [']quotes
+  -- - gsr)'  - [S]urround [R]eplace [)] [']
+  --
+  -- Prefix changed from 's' to 'gs' so builtin visual `s` (change selection)
+  -- isn't nop'd (mini.surround nops the bare prefix key by default).
+  require('mini.surround').setup {
+    mappings = {
+      add = 'gsa',
+      delete = 'gsd',
+      find = 'gsf',
+      find_left = 'gsF',
+      highlight = 'gsh',
+      replace = 'gsr',
+      update_n_lines = 'gsn',
+    },
+  }
 
   -- Simple and easy statusline.
   --  You could remove this setup call if you don't like it,
@@ -759,12 +772,6 @@ do
     -- pyright = {},
     -- rust_analyzer = {},
     --
-    -- Some languages (like typescript) have entire language plugins that can be useful:
-    --    https://github.com/pmizio/typescript-tools.nvim
-    --
-    -- But for many setups, the LSP (`ts_ls`) will work just fine
-    ts_ls = {},
-
     stylua = {}, -- Used to format Lua code
 
     -- Special Lua Config, as recommended by neovim help docs
@@ -830,6 +837,19 @@ do
     vim.lsp.config(name, server)
     vim.lsp.enable(name)
   end
+
+  -- Native TypeScript LSP (replaces ts_ls / typescript-language-server).
+  -- ponytail: assumes `tsc --lsp --stdio` exists on PATH; swap cmd to { 'npx', 'tsc', '--lsp', '--stdio' } if not installed globally.
+  vim.api.nvim_create_autocmd('FileType', {
+    pattern = { 'typescript', 'typescriptreact', 'javascript', 'javascriptreact' },
+    callback = function(args)
+      vim.lsp.start {
+        name = 'typescript-v7',
+        cmd = { 'tsc', '--lsp', '--stdio' },
+        root_dir = vim.fs.dirname(vim.fs.find({ 'tsconfig.json', 'package.json', '.git' }, { upward = true })[1]),
+      }
+    end,
+  })
 end
 
 -- ============================================================
